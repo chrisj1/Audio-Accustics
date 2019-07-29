@@ -9,11 +9,12 @@ from time import sleep
 import warnings
 import pandas as pd
 import matplotlib.pyplot as plt
-
+from sklearn.preprocessing import scale
+from sklearn.cluster import MiniBatchKMeans, KMeans
 
 
 WORKER_NUM = 6
-TERMS = 100
+TERMS = 30
 K_CLUSTERS = 5
 
 def parseTime(time):
@@ -47,9 +48,9 @@ class Recording(object):
 		destination = os.path.dirname(self.file)+"/" + str(self.starttime).replace(' ','_') + "_{}_second_windows".format(self.windowlength)
 		if not os.path.exists(destination):
 			os.mkdir(destination)
-		command = "ffmpeg -loglevel error -i  {} -f wav -f segment -segment_time {} -y {}/clip\%03d.wav".format(self.file,self.windowlength,destination)
+		command = "ffmpeg -loglevel error -i {} -f wav -f segment -segment_time {} -y {}/clip\%03d.wav".format(self.file,self.windowlength,destination)
 		print("Windowing...")
-		os.system(command)
+		#os.system(command)
 
 		for filename in sorted(os.listdir(destination)):	
 			id = int(filename[4:-4])
@@ -102,7 +103,7 @@ def cepstrumCoefficents(filename):
 	# compute the power spectrums on each window
 	powerspectrum = np.abs(np.fft.fft(signal, n=TERMS))**2
 	# compute the cepstrum. These should be real, but due to floating point issues we ignore the imaginary values.
-	cepstrum = np.real(np.fft.ifft(np.nan_to_num(np.log(powerspectrum)),n=TERMS))
+	cepstrum = np.real(np.fft.ifft(np.nan_to_num(powerspectrum),n=TERMS))
 	assert(len(cepstrum) == TERMS)
 	file.close()
 
@@ -139,18 +140,19 @@ for r in recordings:
 		windows.append(w)
 
 # lets try some k-means clustering
-data = [[] for i in range(TERMS)]
-
+data = []
 for window in windows:
-	cepstrum = window.cepstrum
-	for i in range(TERMS):
-		data[i].append(cepstrum[i])
+	data.append(window.cepstrum)
+data = scale(data)
+print(data)
 
+k_means = KMeans(init='k-means++', k=5, n_init=10)
+t0 = time.time()
+k_means.fit(X)
+t_batch = time.time() - t0
+k_means_labels = k_means.labels_
+k_means_cluster_centers = k_means.cluster_centers_
+k_means_labels_unique = np.unique(k_means_labels)
 
-df = pd.DataFrame(data)
-np.random.seed(200)
-
-centroids = {
-	i+1: [np.random.randint(min(data[i]), max(data[i])) for j in range(TERMS)] for i in range(K_CLUSTERS)
-}
-print(len(data[0]))
+print(k_means)
+print(k_means_labels_unique)
